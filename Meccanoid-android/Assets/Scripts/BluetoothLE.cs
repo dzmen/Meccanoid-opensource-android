@@ -302,6 +302,7 @@ public class BluetoothLE : MonoBehaviour
         Array.Clear(this.mapping, 0, this.mapping.Length);
     }
 
+
     private void Start()
     {
         this.lastInterval = Time.realtimeSinceStartup;
@@ -593,31 +594,6 @@ public class BluetoothLE : MonoBehaviour
         {
             this.disconnectCallback(uuid);
         }
-    }
-
-    public void DisconnectForTutorial()
-    {
-        try
-        {
-            BluetoothLEHardwareInterface.DisconnectPeripheral(this.uuids[this.connectedDevice], null);
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError("DisconnectPeripheral failed 3");
-            Debug.LogException(ex);
-            if (ex.Message.Contains("out of range"))
-            {
-                Debug.Log("Out of Range disconnect, break out");
-                base.CancelInvoke("timeOut");
-                this.m_skipTimeoutDisconnect = true;
-                return;
-            }
-        }
-        base.CancelInvoke("SendPIN");
-        base.CancelInvoke("timeOut");
-        BluetoothLE.connectState = (BluetoothLE.connectDataState = (BluetoothLE.connecting = false));
-        this.connectedDevice = -1;
-        this.setWriteState(false);
     }
 
     public void resetScreen()
