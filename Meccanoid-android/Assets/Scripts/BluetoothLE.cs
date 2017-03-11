@@ -497,10 +497,10 @@ public class BluetoothLE : MonoBehaviour
         {
             Debug.Log("*** Peripheral Found: " + a + ", " + b);
         }
-        if (!b.ToLower().Contains("meccanoid"))
-        {
-            return;
-        }
+        //if (!b.ToLower().Contains("meccanoid"))
+        //{
+        //    return;
+        //}
         this.uuids.Add(a);
         this.names.Add(b);
 
