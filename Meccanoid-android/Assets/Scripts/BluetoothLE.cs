@@ -1,95 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using System.Text;
 using UnityEngine;
 
 public class BluetoothLE : MonoBehaviour
 {
-
-    public enum MODEL
-    {
-        OTHER,
-        TALL,
-        SHORT,
-        G16DRONE,
-        TALLG16,
-        SHORTG16
-    }
-    public enum MB_Commands : byte
-    {
-        MB_Status = 1,
-        MB_GetConfig1,
-        MB_GetConfig2,
-        MB_SetConfig1,
-        MB_Setconfig2,
-        MB_SetName,
-        MB_GetName,
-        MB_SetServoPos,
-        MB_GetServoPos,
-        MB_GetServoStatus,
-        MB_SetServoStatus,
-        MB_SetServoLED,
-        MB_SetMotorValues,
-        MB_GetMotorValues,
-        MB_GetRGBLEDColor1,
-        MB_GetRGBLEDColor2,
-        MB_SetRGBLEDColor1,
-        MB_SetRGBLEDColor2,
-        MB_GetLIMInfo,
-        MB_ChangeLIMName,
-        MB_PlayLIM,
-        MB_RecordLIM,
-        MB_DeleteLIM,
-        MB_GetPresetInfo,
-        MB_PlayPreset,
-        MB_SendPinNumber,
-        MB_SetTimeAndDate,
-        MB_SetPCBLED,
-        MB_GetTimeAndDate,
-        MB_GetServoLED,
-        MB_SetServoMapping,
-        MB_GetServoMapping
-    }
-
-    [StructLayout(LayoutKind.Sequential, Size = 1)]
-    public struct MotorIndex
-    {
-        public const int leftFront = 0;
-
-        public const int leftRear = 1;
-
-        public const int rightFront = 2;
-
-        public const int rightRear = 3;
-    }
-
-    [StructLayout(LayoutKind.Sequential, Size = 1)]
-    public struct RobotType
-    {
-        public const byte drone = 0;
-
-        public const byte g15ks = 1;
-
-        public const byte g15 = 2;
-
-        public const byte g16Drone = 3;
-
-        public const byte g16ks = 4;
-
-        public const byte g16 = 5;
-    }
-
-    public enum ServoMode
-    {
-        SendOld,
-        RecieveOld,
-        Send,
-        Unknown,
-        Recieve
-    }
-
     public const int kServoModulesMax = 4;
 
     public const int kServoSlotsMax = 4;
@@ -118,29 +34,9 @@ public class BluetoothLE : MonoBehaviour
 
     private static BluetoothDeviceScript bluetoothDeviceScript;
 
-    public byte[] actualPos = new byte[]
-    {
-        127,
-        127,
-        127,
-        127,
-        127,
-        127,
-        127,
-        127
-    };
+    public byte[] actualPos = new byte[] { 127, 127, 127, 127, 127, 127, 127, 127 };
 
-    public byte[] targetPos = new byte[]
-    {
-        127,
-        127,
-        127,
-        127,
-        127,
-        127,
-        127,
-        127
-    };
+    public byte[] targetPos = new byte[] { 127, 127, 127, 127, 127, 127, 127, 127 };
 
     public byte[] status = new byte[16];
 
@@ -160,14 +56,7 @@ public class BluetoothLE : MonoBehaviour
 
     public bool nameflag;
 
-    private float[] batteryLevels = new float[]
-    {
-        10f,
-        25f,
-        50f,
-        75f,
-        100f
-    };
+    private float[] batteryLevels = new float[] { 10f, 25f, 50f, 75f, 100f };
 
     private static bool connectState;
 
@@ -179,7 +68,7 @@ public class BluetoothLE : MonoBehaviour
 
     private static bool pendingWriteState;
 
-    private static bool motorState = true;
+    private static bool motorState;
 
     private static bool updateState;
 
@@ -221,6 +110,8 @@ public class BluetoothLE : MonoBehaviour
 
     public bool meccaYellowButton;
 
+    public Action<bool, bool, bool, bool> OnMeccaBrainButtonsChanged;
+
     private List<string> names = new List<string>();
 
     private List<string> uuids = new List<string>();
@@ -251,6 +142,14 @@ public class BluetoothLE : MonoBehaviour
 
     public bool robotEverSet;
 
+    public static int currentRobot
+    {
+        get
+        {
+            return BluetoothLE.instance.robotType;
+        }
+    }
+
     public byte MaxSpeed
     {
         get
@@ -263,12 +162,22 @@ public class BluetoothLE : MonoBehaviour
         }
     }
 
-    public static int currentRobot
+    static BluetoothLE()
     {
-        get
+        BluetoothLE.motorState = true;
+    }
+
+    public BluetoothLE()
+    {
+    }
+
+    public byte adjust(byte actual, byte target)
+    {
+        if (Mathf.Abs((int)(actual - target)) <= this.maxSpeed)
         {
-            return (int)BluetoothLE.instance.robotType;
+            return target;
         }
+        return (byte)((actual >= target ? actual - this.maxSpeed : actual + this.maxSpeed));
     }
 
     private void Awake()
@@ -277,7 +186,11 @@ public class BluetoothLE : MonoBehaviour
         {
             Debug.Log("BluetoothLE.Awake called");
         }
-        if (!BluetoothLE.created)
+        if (BluetoothLE.created)
+        {
+            UnityEngine.Object.Destroy(base.gameObject);
+        }
+        else
         {
             UnityEngine.Object.DontDestroyOnLoad(this);
             BluetoothLE.bluetoothDeviceScript = BluetoothLEHardwareInterface.Initialize(true, false, new Action(this.Initialized), new Action<string>(this.Error));
@@ -293,1245 +206,20 @@ public class BluetoothLE : MonoBehaviour
             }
             BluetoothLE.instance = this;
         }
-        else
-        {
-            UnityEngine.Object.Destroy(base.gameObject);
-        }
-        Array.Clear(this.status, 0, this.status.Length);
-        Array.Clear(this.config, 0, this.config.Length);
-        Array.Clear(this.mapping, 0, this.mapping.Length);
+        Array.Clear(this.status, 0, (int)this.status.Length);
+        Array.Clear(this.config, 0, (int)this.config.Length);
+        Array.Clear(this.mapping, 0, (int)this.mapping.Length);
     }
 
-
-    private void Start()
+    public void calculateChecksum(ref byte[] data)
     {
-        this.lastInterval = Time.realtimeSinceStartup;
-        this.frames = 0;
-    }
-
-    public bool isInitialized()
-    {
-        return !(null == BluetoothLE.bluetoothDeviceScript) && BluetoothLE.bluetoothDeviceScript.isInitialized();
-    }
-
-    private void executeQueue()
-    {
-        if (this.commandQueue.Count > 0)
-        {
-            this.SendCommand(this.commandQueue[0], false);
-            this.commandQueue.RemoveAt(0);
-        }
-    }
-
-    private void OnApplicationPause(bool paused)
-    {
-        BluetoothLEHardwareInterface.PauseMessages(paused);
-        this.m_appPaused = paused;
-    }
-
-    private void OnApplicationQuit()
-    {
-        if (!Application.isEditor)
-        {
-            Debug.Log("Application ending after " + Time.time + " seconds");
-            this.Disconnect();
-        }
-    }
-
-    private void OnDestroy()
-    {
-        BluetoothLEHardwareInterface.DeInitialize(null);
-        BluetoothLE.connectState = (BluetoothLE.connectDataState = (BluetoothLE.connecting = false));
-        if (this.debugOutput)
-        {
-            Debug.Log("BluetoothLE.OnDestroy called");
-        }
-    }
-
-    public void setBatteryLevel()
-    {
-        if (!Application.isEditor)
-        {
-            return;
-        }
-        this.status[11] = (byte)Mathf.CeilToInt((float)UnityEngine.Random.Range(1, 6));
-        this.config0flag = true;
-    }
-
-    public int getBatteryLevel()
-    {
-        return (!this.config0flag) ? -1 : ((int)this.status[11]);
-    }
-
-    public bool getConnectState()
-    {
-        return BluetoothLE.connectState;
-    }
-
-    public bool getConnectDataState()
-    {
-        return BluetoothLE.connectDataState;
-    }
-
-    public bool getConnecting()
-    {
-        return BluetoothLE.connecting;
-    }
-
-    public int getScannedDevices()
-    {
-        return (!(null == BluetoothLE.bluetoothDeviceScript) && BluetoothLE.bluetoothDeviceScript.DiscoveredDeviceList != null) ? BluetoothLE.bluetoothDeviceScript.DiscoveredDeviceList.Count : 0;
-    }
-
-    public bool getWriteState()
-    {
-        return BluetoothLE.writeState;
-    }
-
-    public void setUpdateState(bool state)
-    {
-        BluetoothLE.updateState = state;
-    }
-
-    public bool getUpdateState()
-    {
-        return BluetoothLE.updateState;
-    }
-
-    public bool getMotorState()
-    {
-        return BluetoothLE.motorState;
-    }
-
-    public void setMotorState(bool state)
-    {
-        BluetoothLE.motorState = state;
-    }
-
-    public bool[] getMotors()
-    {
-        return this.motors;
-    }
-
-    public void setMotors(bool[] input)
-    {
-        if (input.Length == 4)
-        {
-            this.motors = input;
-        }
-    }
-
-    public void setWriteState(bool state)
-    {
-        this.setWriteState(state, false);
-    }
-
-    public void setWriteState(bool state, bool force)
-    {
-        if (!force && BluetoothLE.pendingWriteState == state)
-        {
-            return;
-        }
-        if (!BluetoothLE.pendingWriteState)
-        {
-            this.getServoPos();
-        }
-        BluetoothLE.pendingWriteState = state;
-        this.setServoMode((byte)((!state) ? 4 : 2));
-        if (!BluetoothLE.pendingWriteState)
-        {
-            this.getServoPos();
-        }
-    }
-
-    public void Initialized()
-    {
-        if (this.debugOutput)
-        {
-            Debug.Log("*** BLE initialized");
-        }
-    }
-
-    public void Scan()
-    {
-        if (!BluetoothLE.scanning)
-        {
-            this.Clear();
-            BluetoothLEHardwareInterface.ScanForPeripheralsWithServices(null, new Action<string, string>(this.Found), null, false);
-            BluetoothLE.scanning = true;
-            if (this.debugOutput)
-            {
-                Debug.Log("BluetoothLE Scan called");
-            }
-        }
-        else
-        {
-            this.StopScan();
-        }
-    }
-
-    public void Clear()
-    {
-        Debug.Log("BLE Clear before scan");
-        this.names.Clear();
-        this.uuids.Clear();
-    }
-
-    public void StopScan()
-    {
-        if (BluetoothLE.scanning)
-        {
-            BluetoothLEHardwareInterface.StopScan();
-            BluetoothLE.scanning = false;
-            if (this.debugOutput)
-            {
-                Debug.Log("BluetoothLE StopScan called");
-            }
-        }
-    }
-
-    public void Found(string a, string b)
-    {
-        Debug.Log("BLE Peripheral Found: " + a + ", " + b);
-        if (this.debugOutput)
-        {
-            Debug.Log("*** Peripheral Found: " + a + ", " + b);
-        }
-        //if (!b.ToLower().Contains("meccanoid"))
-        //{
-        //    return;
-        //}
-        this.uuids.Add(a);
-        this.names.Add(b);
-
-        if (this.deviceFoundCallback != null)
-        {
-            this.deviceFoundCallback(this.names);
-        }
-    }
-
-    public void Connect(int index)
-    {
-        this.StopScan();
-        this.connectedDevice = index;
-        BluetoothLE.connectState = (BluetoothLE.connectDataState = false);
-        BluetoothLE.connecting = true;
-        if (this.jDebug)
-        {
-            Debug.Log("connecting to " + index);
-        }
-        if (this.jDebug)
-        {
-            Debug.Log(this.uuids[this.connectedDevice]);
-        }
-        BluetoothLEHardwareInterface.ConnectToPeripheral(this.uuids[this.connectedDevice], new Action<string>(this.Connected), new Action<string, string>(this.Service), new Action<string, string, string>(this.Characteristic), null);
-        base.Invoke("timeOut", 30f);
-    }
-
-    public void Connected(string msg)
-    {
-        if (this.debugOutput || this.jDebug)
-        {
-            Debug.Log("*** BLE Connected: " + msg);
-        }
-    }
-
-    public void Disconnect()
-    {
-        if (this.debugOutput)
-        {
-            Debug.Log("*** BLE Disconnect");
-        }
-        try
-        {
-            BluetoothLEHardwareInterface.DisconnectPeripheral(this.uuids[this.connectedDevice], this.disconnectCallback);
-        }
-        catch (Exception ex2)
-        {
-            Debug.LogError("DisconnectPeripheral failed 2");
-            Debug.LogException(ex2);
-            if (ex2.Message.Contains("out of range"))
-            {
-                Debug.Log("Out of Range disconnect, break out");
-                base.CancelInvoke("timeOut");
-                this.m_skipTimeoutDisconnect = true;
-                return;
-            }
-        }
-        base.CancelInvoke("SendPIN");
-        base.CancelInvoke("timeOut");
-        BluetoothLE.connectState = (BluetoothLE.connectDataState = (BluetoothLE.connecting = false));
-        this.connectedDevice = -1;
-        this.setWriteState(false);
-        if (this.waitingForSequenceFeedback)
-        {
-            this.waitingForSequenceFeedback = false;
-            return;
-        }
-        base.Invoke("disconnectCB", 2f);
-    }
-
-    private void disconnectCB()
-    {
-        base.CancelInvoke("disconnectCB");
-        if (this.disconnectCallback != null)
-        {
-            this.disconnectCallback(null);
-        }
-    }
-
-    public void disconnectedPeripheralAction(string uuid)
-    {
-        if (this.debugOutput)
-        {
-            Debug.Log("*** BLE disconnectedPeripheralAction: " + uuid);
-        }
-        base.CancelInvoke("SendPIN");
-        BluetoothLE.connectState = (BluetoothLE.connectDataState = (BluetoothLE.connecting = false));
-        this.connectedDevice = -1;
-        this.setWriteState(false);
-        if (this.disconnectCallback != null)
-        {
-            this.disconnectCallback(uuid);
-        }
-    }
-
-    public void resetScreen()
-    {
-        if (this.debugOutput)
-        {
-            Debug.Log("*** BLE resetScreen");
-        }
-        base.CancelInvoke("SendPIN");
-        BluetoothLE.connectState = (BluetoothLE.connectDataState = (BluetoothLE.connecting = false));
-        this.connectedDevice = -1;
-        this.setWriteState(false);
-        this.robotType = 0;
-    }
-
-    public void Subscribe()
-    {
-        if (this.debugOutput)
-        {
-            Debug.Log("*** BLE Subscribe");
-        }
-        BluetoothLEHardwareInterface.SubscribeCharacteristic(this.uuids[this.connectedDevice], this.serviceUUID, this.subscribeUUID, new Action<string>(this.Subscribed), new Action<string, byte[]>(this.SubResult));
-    }
-
-    public void SendPIN()
-    {
-        if (this.debugOutput)
-        {
-            Debug.Log("*** BLE SendPIN");
-        }
-        byte[] expr_1C = new byte[20];
-        expr_1C[0] = 26;
-        expr_1C[1] = 1;
-        expr_1C[3] = 1;
-        byte[] data = expr_1C;
-        this.calculateChecksum(ref data);
-        BluetoothLEHardwareInterface.WriteCharacteristic(this.uuids[this.connectedDevice], this.serviceUUID, this.characteristicUUID, data, 20, this.ack, new Action<string>(this.Result));
-    }
-
-    private void Completed()
-    {
-        if (this.connectCallback != null)
-        {
-            this.connectCallback(this.uuids[this.connectedDevice]);
-        }
-        this.setTimeDate();
-        this.getServoPos();
-        this.requestStatus();
-        this.getName();
-        this.setWriteState(false, true);
-    }
-
-    public void Notification(string msg)
-    {
-        if (this.debugOutput)
-        {
-            Debug.Log("*** Notification: " + msg);
-        }
-    }
-
-    public void Subscribed(string msg)
-    {
-        if (this.debugOutput)
-        {
-            Debug.Log("*** Subscribed: " + msg);
-        }
-        this.SendPIN();
-    }
-
-    public void requestStatus()
-    {
-        if (this.m_checkingForStatus)
-        {
-            Debug.Log("checking for status already");
-        }
-        this.config0flag = (this.config1flag = (this.config2flag = (this.config3flag = false)));
-        this.m_checkingForStatus = true;
-        this.SendCommand(1);
-        this.SendCommand(2);
-        this.SendCommand(3);
-        this.SendCommand(32);
-    }
-
-    private void setTimeDate()
-    {
-        DateTime now = DateTime.Now;
-        if (this.debugOutput)
-        {
-            Debug.Log(now.TimeOfDay);
-        }
-        int num = now.Hour;
-        bool flag = num >= 12;
-        if (flag)
-        {
-            num -= 12;
-        }
-        if (num == 0)
-        {
-            num = 12;
-        }
-        byte[] expr_4E = new byte[20];
-        expr_4E[0] = 27;
-        expr_4E[1] = (byte)(num / 10);
-        expr_4E[2] = (byte)(num % 10);
-        expr_4E[3] = (byte)(now.Minute / 10);
-        expr_4E[4] = (byte)(now.Minute % 10);
-        expr_4E[5] = (byte)((!flag) ? 0 : 1);
-        expr_4E[7] = (byte)now.Month;
-        expr_4E[8] = (byte)now.Day;
-        expr_4E[9] = (byte)(now.Year / 1000 % 10);
-        expr_4E[10] = (byte)(now.Year / 100 % 10);
-        expr_4E[11] = (byte)(now.Year / 10 % 10);
-        expr_4E[12] = (byte)(now.Year % 10);
-        byte[] ch = expr_4E;
-        this.SendCommand(ch);
-    }
-
-    public void getTimeDate()
-    {
-        this.timeDateflag = false;
-        this.SendCommand(29);
-    }
-
-    public void getName()
-    {
-        this.nameflag = false;
-        this.SendCommand(7);
-    }
-
-    public void setName(string name)
-    {
-        if (!BluetoothLE.connectState)
-        {
-            return;
-        }
-        byte[] expr_12 = new byte[20];
-        expr_12[0] = 6;
-        byte[] array = expr_12;
         int num = 0;
-        while (num < name.Length && num < 16 && name[num] >= ' ' && name[num] <= '~')
+        for (int i = 0; i < (int)data.Length - 2; i++)
         {
-            array[num + 1] = (byte)name[num];
-            num++;
+            num = num + data[i];
         }
-        this.SendCommand(array);
-        this.meccaName = name;
-        this.nameflag = true;
-    }
-
-    public void setMapping()
-    {
-        if (!BluetoothLE.connectState)
-        {
-            return;
-        }
-        byte[] expr_12 = new byte[20];
-        expr_12[0] = 31;
-        byte[] array = expr_12;
-        for (int i = 0; i < 16; i++)
-        {
-            array[i + 1] = this.mapping[i];
-        }
-        this.SendCommand(array);
-    }
-
-    public void SendAwake()
-    {
-        if (!BluetoothLE.connectState)
-        {
-            return;
-        }
-        this.SendCommand(25, 29);
-    }
-    public void SubResult(string msg, byte[] data)
-    {
-        StringBuilder stringBuilder = new StringBuilder();
-        if (data.Length > 0)
-        {
-            stringBuilder.Append(msg + ": (" + data[0].ToString("X") + ") ");
-        }
-        int num = 1;
-        while (num <= 8 && num < data.Length)
-        {
-            stringBuilder.Append(data[num].ToString("X") + " ");
-            num++;
-        }
-        if (this.debugOutput)
-        {
-            Debug.Log("*** SubResult: " + stringBuilder.ToString());
-        }
-        byte b = data[0];
-        switch (b)
-        {
-            case 1:
-                for (int i = 0; i < 16; i++)
-                {
-                    this.status[i] = data[i + 1];
-                }
-                if (this.debugOutput)
-                {
-                    Debug.Log(string.Concat(new object[]
-                    {
-                    "STATUS DATA: ",
-                    this.status[0],
-                    ",",
-                    this.status[1],
-                    ",",
-                    this.status[2],
-                    ",",
-                    this.status[3],
-                    ",",
-                    this.status[4],
-                    ",",
-                    this.status[5],
-                    ",",
-                    this.status[6],
-                    ",",
-                    this.status[7],
-                    ",",
-                    this.status[8],
-                    ",",
-                    this.status[9],
-                    ",",
-                    this.status[10],
-                    ",",
-                    this.status[11],
-                    ",",
-                    this.status[12],
-                    ",",
-                    this.status[13],
-                    ",",
-                    this.status[14],
-                    ",",
-                    this.status[15]
-                    }));
-                }
-                if (this.status[15] == 5 || this.status[15] == 6)
-                {
-                    if (this.jDebug)
-                    {
-                        Debug.Log("ERROR FOUND");
-                    }
-                    this.CheckForConfigError();
-                }
-                this.config0flag = true;
-                if (this.status[15] == 4)
-                {
-                    if (this.jDebug)
-                    {
-                        Debug.Log("SWITCH FOUND ");
-                    }
-                }
-                if (this.status[15] != 0)
-                {
-                    if (this.jDebug)
-                    {
-                        Debug.Log("ERROR FOUND : " + this.status[15]);
-                    }
-                    if (this.jDebug)
-                    {
-                        Debug.Log("behavior running : Not implemented yet");
-                    }
-                }
-                this.updateMeccaButtons();
-                goto IL_D02;
-            case 2:
-                for (int j = 0; j < 16; j++)
-                {
-                    this.config[j] = data[j + 1];
-                }
-                this.config1flag = true;
-                if (this.debugOutput)
-                {
-                    Debug.LogWarning(string.Concat(new object[]
-                    {
-                    "Config1: ",
-                    data[1],
-                    ",",
-                    data[2],
-                    ",",
-                    data[3],
-                    ",",
-                    data[4],
-                    " | ",
-                    data[5],
-                    ",",
-                    data[6],
-                    ",",
-                    data[7],
-                    ",",
-                    data[8],
-                    " | ",
-                    data[9],
-                    ",",
-                    data[10],
-                    ",",
-                    data[11],
-                    ",",
-                    data[12],
-                    " | ",
-                    data[13],
-                    ",",
-                    data[14],
-                    ",",
-                    data[15],
-                    ",",
-                    data[16]
-                    }));
-                }
-                this.m_checkingForStatus = false;
-                goto IL_D02;
-            case 3:
-                for (int k = 0; k < 16; k++)
-                {
-                    this.config[k + 16] = data[k + 1];
-                }
-                this.config2flag = true;
-                if (this.debugOutput)
-                {
-                    Debug.LogWarning(string.Concat(new object[]
-                    {
-                    "Config2: ",
-                    data[1],
-                    ",",
-                    data[2],
-                    ",",
-                    data[3],
-                    ",",
-                    data[4],
-                    " | ",
-                    data[5],
-                    ",",
-                    data[6],
-                    ",",
-                    data[7],
-                    ",",
-                    data[8],
-                    " | ",
-                    data[9],
-                    ",",
-                    data[10],
-                    ",",
-                    data[11],
-                    ",",
-                    data[12],
-                    " | ",
-                    data[13],
-                    ",",
-                    data[14],
-                    ",",
-                    data[15],
-                    ",",
-                    data[16]
-                    }));
-                }
-                goto IL_D02;
-            /*case 4:
-            case 5:
-            case 6:
-            case 8:
-            IL_C6:
-                switch (b)
-                {
-                    case 26:
-                        base.CancelInvoke("timeOut");
-                        base.CancelInvoke("SendPIN");
-                        BluetoothLE.connecting = false;
-                        if (data[1] == 0 && data[2] == 1 && data[3] == 255)
-                        {
-                            BluetoothLE.connectState = false;
-                            this.Disconnect();
-                        }
-                        else
-                        {
-                            if (this.debugOutput)
-                            {
-                                Debug.Log(string.Concat(new object[]
-                                {
-                            "MB_SendPinNumber returned: ",
-                            data[1],
-                            ", ",
-                            data[2],
-                            ", ",
-                            data[3],
-                            ", ",
-                            data[4]
-                                }));
-                            }
-                            BluetoothLE.connectState = true;
-                            this.Completed();
-                        }
-                        goto IL_D02;
-                    case 27:
-                    case 28:
-                    IL_E0:
-                        if (b == 15)
-                        {
-                            if (this.getLEDColorCallback != null)
-                            {
-                                Color color = this.getColor((int)data[3], (int)data[4]);
-                                this.getLEDColorCallback(color);
-                            }
-                            goto IL_D02;
-                        }
-                        if (b == 19)
-                        {
-                            if (this.getLIMInfoCallback != null)
-                            {
-                                byte b2 = data[1];
-                                if (this.jDebug)
-                                {
-                                    Debug.Log("GET LIM INFO: " + b2);
-                                }
-                                byte b3 = data[2];
-                                char[] array = new char[16];
-                                for (int l = 0; l < 15; l++)
-                                {
-                                    array[l] = (char)data[l + 3];
-                                }
-                                array[15] = '\0';
-                                if (this.jDebug)
-                                {
-                                    Debug.Log("LIM NAME: " + new string(array));
-                                }
-                                float num2 = (float)Convert.ToInt32(b3);
-                                if (this.jDebug)
-                                {
-                                    Debug.Log(string.Concat(new object[]
-                                    {
-                                "LIM CONVERTED DURATION: ",
-                                num2,
-                                " : ",
-                                b3
-                                    }));
-                                }
-                                this.getLIMInfoCallback(b2, num2, new string(array));
-                            }
-                            goto IL_D02;
-                        }
-                        if (b != 32)
-                        {
-                            goto IL_D02;
-                        }
-                        for (int m = 0; m < 16; m++)
-                        {
-                            this.mapping[m] = data[m + 1];
-                        }
-                        this.config3flag = true;
-                        if (this.debugOutput)
-                        {
-                            Debug.LogWarning(string.Concat(new object[]
-                            {
-                        "Mapping: ",
-                        data[1],
-                        ",",
-                        data[2],
-                        ",",
-                        data[3],
-                        ",",
-                        data[4],
-                        " | ",
-                        data[5],
-                        ",",
-                        data[6],
-                        ",",
-                        data[7],
-                        ",",
-                        data[8],
-                        " | ",
-                        data[9],
-                        ",",
-                        data[10],
-                        ",",
-                        data[11],
-                        ",",
-                        data[12],
-                        " | ",
-                        data[13],
-                        ",",
-                        data[14],
-                        ",",
-                        data[15],
-                        ",",
-                        data[16]
-                            }));
-                        }
-                        goto IL_D02;
-                    case 29:
-                        this.timeDate = string.Format("{0}{1}:{2}{3}{4} onMB_GetServoMapping {5}/{6}/{7}{8}{9}{10}", new object[]
-                        {
-                    (data[1] != 0) ? data[1].ToString() : string.Empty,
-                    data[2].ToString(),
-                    data[3].ToString(),
-                    data[4].ToString(),
-                    (data[5] != 0) ? "pm" : "am",
-                    data[7].ToString(),
-                    data[8].ToString(),
-                    data[9].ToString(),
-                    data[10].ToString(),
-                    data[11].ToString(),
-                    data[12].ToString()
-                        });
-                        this.timeDateflag = true;
-                        goto IL_D02;
-                }
-                goto IL_E0;*/
-            case 7:
-                {
-                    this.meccaName = string.Empty;
-                    int num3 = 1;
-                    while (num3 <= 16 && data[num3] >= 32 && data[1] <= 126)
-                    {
-                        this.meccaName += (char)data[num3];
-                        num3++;
-                    }
-                    this.nameflag = true;
-                    goto IL_D02;
-                }
-            case 9:
-                for (int n = 0; n < 8; n++)
-                {
-                    this.actualPos[n] = data[n + 1];
-                }
-                if (this.getServoPosCallback != null)
-                {
-                    this.getServoPosCallback();
-                }
-                goto IL_D02;
-        }
-        //goto IL_C6;
-    IL_D02:
-        if (this.resultsCallback != null)
-        {
-            this.resultsCallback(data);
-        }
-    }
-
-    public void timeOut()
-    {
-        if (this.debugOutput || this.jDebug)
-        {
-            Debug.Log("*** BLE timeOut");
-        }
-        base.CancelInvoke("timeOut");
-        this.Disconnect();
-        if (this.m_skipTimeoutDisconnect)
-        {
-            this.m_skipTimeoutDisconnect = false;
-            return;
-        }
-        if (this.disconnectCallback != null)
-        {
-            this.disconnectCallback(null);
-        }
-    }
-
-    public void setRobotType(MODEL type)
-    {
-        this.robotType = (byte)type;
-    }
-
-    private void updateMeccaButtons()
-    {
-        this.meccaBlueButton = ((this.status[7] & 1) != 0);
-        this.meccaRedButton = ((this.status[7] & 2) != 0);
-        this.meccaGreenButton = ((this.status[7] & 4) != 0);
-        this.meccaYellowButton = ((this.status[7] & 8) != 0);
-    }
-
-    private void SendCommand(byte command, bool queue)
-    {
-        this.SendCommand(command, 0, queue);
-    }
-
-    public void SendCommand(byte command)
-    {
-        this.SendCommand(command, 0);
-    }
-
-    private void SendCommand(byte command, byte data, bool queue)
-    {
-        byte[] expr_07 = new byte[20];
-        expr_07[0] = command;
-        expr_07[1] = data;
-        expr_07[2] = data;
-        expr_07[3] = data;
-        expr_07[4] = data;
-        expr_07[5] = data;
-        expr_07[6] = data;
-        expr_07[7] = data;
-        expr_07[8] = data;
-        expr_07[9] = data;
-        expr_07[10] = data;
-        expr_07[11] = data;
-        expr_07[12] = data;
-        expr_07[13] = data;
-        expr_07[14] = data;
-        expr_07[15] = data;
-        expr_07[16] = data;
-        expr_07[17] = data;
-        byte[] ch = expr_07;
-        this.SendCommand(ch, queue);
-    }
-
-    public void SendCommand(byte command, byte data)
-    {
-        byte[] expr_07 = new byte[20];
-        expr_07[0] = command;
-        expr_07[1] = data;
-        expr_07[2] = data;
-        expr_07[3] = data;
-        expr_07[4] = data;
-        expr_07[5] = data;
-        expr_07[6] = data;
-        expr_07[7] = data;
-        expr_07[8] = data;
-        expr_07[9] = data;
-        expr_07[10] = data;
-        expr_07[11] = data;
-        expr_07[12] = data;
-        expr_07[13] = data;
-        expr_07[14] = data;
-        expr_07[15] = data;
-        expr_07[16] = data;
-        expr_07[17] = data;
-        byte[] ch = expr_07;
-        this.SendCommand(ch);
-    }
-
-    public void SendCommand(byte[] ch1)
-    {
-        this.SendCommand(ch1, true);
-    }
-
-    private void SendCommand(byte[] ch1, bool queue)
-    {
-        if (!BluetoothLE.connectState)
-        {
-            return;
-        }
-        this.calculateChecksum(ref ch1);
-        if (this.debugOutput)
-        {
-            string str = string.Empty;
-            byte[] array = ch1;
-            for (int i = 0; i < array.Length; i++)
-            {
-                byte b = array[i];
-                str += string.Format("{0:X2}", b);
-            }
-        }
-        if (!queue)
-        {
-            BluetoothLEHardwareInterface.WriteCharacteristic(this.uuids[this.connectedDevice], this.serviceUUID, this.characteristicUUID, ch1, 20, this.ack, new Action<string>(this.Result));
-            if (ch1[0] == 11)
-            {
-                BluetoothLE.writeState = (ch1[1] == 0 || ch1[1] == 2);
-            }
-        }
-        else
-        {
-            this.commandQueue.Add(ch1);
-        }
-    }
-
-    public void getServoPos()
-    {
-        this.getServoPos(true);
-    }
-
-    private void getServoPos(bool queue)
-    {
-        if (!BluetoothLE.connectState)
-        {
-            return;
-        }
-        byte[] expr_12 = new byte[20];
-        expr_12[0] = 9;
-        byte[] array = expr_12;
-        this.calculateChecksum(ref array);
-        if (!queue)
-        {
-            BluetoothLEHardwareInterface.WriteCharacteristic(this.uuids[this.connectedDevice], this.serviceUUID, this.characteristicUUID, array, 20, this.ack, new Action<string>(this.Result));
-        }
-        else
-        {
-            this.commandQueue.Add(array);
-        }
-    }
-
-    public void setServoPos()
-    {
-        this.setServoPos(true);
-    }
-
-    private void setServoPos(bool queue)
-    {
-        byte[] array = new byte[]
-        {
-            8,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            0,
-            0
-        };
-        for (int i = 0; i < 8; i++)
-        {
-            array[i + 1] = (this.actualPos[i] = this.adjust(this.actualPos[i], this.targetPos[i]));
-        }
-        this.calculateChecksum(ref array);
-        if (BluetoothLE.connectState && BluetoothLE.writeState)
-        {
-            if (!queue)
-            {
-                BluetoothLEHardwareInterface.WriteCharacteristic(this.uuids[this.connectedDevice], this.serviceUUID, this.characteristicUUID, array, 20, this.ack, new Action<string>(this.setResult));
-            }
-            else
-            {
-                this.commandQueue.Add(array);
-            }
-            StringBuilder stringBuilder = new StringBuilder();
-            for (int j = 1; j <= 8; j++)
-            {
-                stringBuilder.Append(array[j].ToString("X2") + " ");
-            }
-            if (this.debugOutput)
-            {
-                Debug.Log(string.Concat(new object[]
-                {
-                    "*** setServoPos: ",
-                    stringBuilder.ToString(),
-                    " (",
-                    Time.realtimeSinceStartup,
-                    ")"
-                }));
-            }
-        }
-    }
-
-    public void setServoMode(byte mode)
-    {
-        if (!BluetoothLE.connectState)
-        {
-            return;
-        }
-        byte[] expr_12 = new byte[20];
-        expr_12[0] = 11;
-        expr_12[1] = mode;
-        expr_12[2] = mode;
-        expr_12[3] = mode;
-        expr_12[4] = mode;
-        expr_12[5] = mode;
-        expr_12[6] = mode;
-        expr_12[7] = mode;
-        expr_12[8] = mode;
-        expr_12[9] = mode;
-        expr_12[10] = mode;
-        expr_12[11] = mode;
-        expr_12[12] = mode;
-        expr_12[13] = mode;
-        expr_12[14] = mode;
-        expr_12[15] = mode;
-        expr_12[16] = mode;
-        byte[] item = expr_12;
-        this.calculateChecksum(ref item);
-        this.commandQueue.Add(item);
-    }
-
-    private void setMotorValues()
-    {
-        if (!BluetoothLE.connectState)
-        {
-            return;
-        }
-        byte[] expr_12 = new byte[20];
-        expr_12[0] = 13;
-        expr_12[3] = (byte)this.motorOutputSpeed;
-        expr_12[4] = (byte)this.motorOutputSpeed;
-        expr_12[5] = 255;
-        expr_12[6] = 255;
-        byte[] array = expr_12;
-        if (this.motors[0])
-        {
-            array[1] = 1;
-        }
-        else if (this.motors[1])
-        {
-            array[1] = 2;
-        }
-        else
-        {
-            array[3] = 0;
-        }
-        if (this.motors[2])
-        {
-            array[2] = 1;
-        }
-        else if (this.motors[3])
-        {
-            array[2] = 2;
-        }
-        else
-        {
-            array[4] = 0;
-        }
-        this.calculateChecksum(ref array);
-        BluetoothLEHardwareInterface.WriteCharacteristic(this.uuids[this.connectedDevice], this.serviceUUID, this.characteristicUUID, array, 20, this.ack, new Action<string>(this.Result));
-        if (this.debugOutput)
-        {
-            Debug.Log(string.Concat(new object[]
-            {
-                "setMotorValues: ",
-                array[1],
-                " (",
-                array[3],
-                ") - ",
-                array[2],
-                " (",
-                array[4],
-                ")"
-            }));
-        }
-    }
-
-    public void playPreset(byte index, bool immediatePlay = false)
-    {
-        this.playPreset(index, 0, immediatePlay);
-    }
-
-    public void playPreset(byte index, byte sub, bool immediatePlay = false)
-    {
-        if (!BluetoothLE.connectState)
-        {
-            return;
-        }
-        byte[] expr_12 = new byte[20];
-        expr_12[0] = 25;
-        expr_12[1] = index;
-        expr_12[2] = sub;
-        byte[] item = expr_12;
-        this.calculateChecksum(ref item);
-        this.commandQueue.Add(item);
-        if (this.debugOutput)
-        {
-            Debug.Log("playPreset(" + index + ") called");
-        }
-    }
-
-    public void recordLIM(byte index)
-    {
-        if (!BluetoothLE.connectState)
-        {
-            return;
-        }
-        byte[] expr_12 = new byte[20];
-        expr_12[0] = 22;
-        expr_12[1] = index;
-        byte[] item = expr_12;
-        this.calculateChecksum(ref item);
-        this.commandQueue.Add(item);
-        if (this.debugOutput)
-        {
-            Debug.Log("recordLIM(" + index + ") called");
-        }
-    }
-
-    public void playLIM(byte index)
-    {
-        if (!BluetoothLE.connectState)
-        {
-            return;
-        }
-        byte[] expr_12 = new byte[20];
-        expr_12[0] = 21;
-        expr_12[1] = index;
-        byte[] item = expr_12;
-        this.calculateChecksum(ref item);
-        this.commandQueue.Add(item);
-        if (this.debugOutput)
-        {
-            Debug.Log("playLIM(" + index + ") called");
-        }
-    }
-
-    public void getLIMInfo(byte index)
-    {
-        if (!BluetoothLE.connectState)
-        {
-            return;
-        }
-        byte[] expr_12 = new byte[20];
-        expr_12[0] = 19;
-        expr_12[1] = index;
-        byte[] item = expr_12;
-        this.calculateChecksum(ref item);
-        this.commandQueue.Add(item);
-        if (this.debugOutput || this.jDebug)
-        {
-            Debug.Log("getLIMInfo(" + index + ") called");
-        }
-    }
-
-    public void deleteLIM(byte index, string name = "")
-    {
-        if (!BluetoothLE.connectState)
-        {
-            return;
-        }
-        byte[] expr_12 = new byte[20];
-        expr_12[0] = 23;
-        expr_12[1] = index;
-        byte[] array = expr_12;
-        char[] array2 = name.ToCharArray();
-        for (int i = 0; i < array2.Length; i++)
-        {
-            array[i + 3] = (byte)array2[i];
-        }
-        this.calculateChecksum(ref array);
-        this.commandQueue.Add(array);
-        if (this.jDebug || this.debugOutput)
-        {
-            Debug.Log("deleteLIM(" + index + ") called");
-        }
+        data[(int)data.Length - 2] = (byte)((num & 65280) >> 8);
+        data[(int)data.Length - 1] = (byte)(num & 255);
     }
 
     public void changeLIMName(byte index, string name)
@@ -1540,59 +228,17 @@ public class BluetoothLE : MonoBehaviour
         {
             return;
         }
-        byte[] array = new byte[15];
-        for (int i = 0; i < Math.Min(name.Length, array.Length); i++)
+        byte[] num = new byte[15];
+        for (int i = 0; i < Math.Min(name.Length, (int)num.Length); i++)
         {
-            array[i] = Convert.ToByte(name[i]);
+            num[i] = Convert.ToByte(name[i]);
         }
-        byte[] expr_48 = new byte[20];
-        expr_48[0] = 20;
-        expr_48[1] = index;
-        expr_48[3] = array[0];
-        expr_48[4] = array[1];
-        expr_48[5] = array[2];
-        expr_48[6] = array[3];
-        expr_48[7] = array[4];
-        expr_48[8] = array[5];
-        expr_48[9] = array[6];
-        expr_48[10] = array[7];
-        expr_48[11] = array[8];
-        expr_48[12] = array[9];
-        expr_48[13] = array[10];
-        expr_48[14] = array[11];
-        expr_48[15] = array[12];
-        expr_48[16] = array[13];
-        expr_48[17] = array[14];
-        byte[] item = expr_48;
-        this.calculateChecksum(ref item);
-        this.commandQueue.Add(item);
+        byte[] numArray = new byte[] { 20, index, 0, num[0], num[1], num[2], num[3], num[4], num[5], num[6], num[7], num[8], num[9], num[10], num[11], num[12], num[13], num[14], 0, 0 };
+        this.calculateChecksum(ref numArray);
+        this.commandQueue.Add(numArray);
         if (this.debugOutput)
         {
-            Debug.Log("renameLIM(" + index + ") called");
-        }
-    }
-
-    public void Result(string msg)
-    {
-        if (this.debugOutput)
-        {
-            Debug.Log("*** Result: " + msg);
-        }
-    }
-
-    public void setResult(string msg)
-    {
-        if (this.debugOutput)
-        {
-            Debug.Log("*** setResult: " + msg);
-        }
-    }
-
-    public void Service(string a, string b)
-    {
-        if (this.debugOutput)
-        {
-            Debug.Log("*** BLE Service: " + a + ", " + b);
+            Debug.Log(string.Concat("renameLIM(", index, ") called"));
         }
     }
 
@@ -1600,91 +246,12 @@ public class BluetoothLE : MonoBehaviour
     {
         if (this.debugOutput)
         {
-            Debug.Log(string.Concat(new string[]
-            {
-                "*** BLE Characteristic: ",
-                a,
-                ", ",
-                b,
-                ", ",
-                c
-            }));
+            Debug.Log(string.Concat(new string[] { "*** BLE Characteristic: ", a, ", ", b, ", ", c }));
         }
         if (this.isMatch(b, this.serviceUUID) && this.isMatch(c, this.subscribeUUID))
         {
             this.Subscribe();
         }
-    }
-
-    public bool isMatch(string a, string b)
-    {
-        if (a == null || b == null)
-        {
-            return false;
-        }
-        string[] array = a.Split(new char[]
-        {
-            '-'
-        });
-        string[] array2 = b.Split(new char[]
-        {
-            '-'
-        });
-        int num;
-        int num2;
-        return array.Length != 0 && array2.Length != 0 && int.TryParse(array[0], NumberStyles.HexNumber, null, out num) && int.TryParse(array2[0], NumberStyles.HexNumber, null, out num2) && num == num2;
-    }
-
-    public void Error(string msg)
-    {
-        if (this.debugOutput)
-        {
-            Debug.Log("*** BLE error: " + msg);
-        }
-    }
-
-    public Color getColor(int one, int two)
-    {
-        int num = one & 7;
-        int num2 = one >> 3 & 7;
-        int num3 = two & 7;
-        return new Color((float)num / 7f, (float)num2 / 7f, (float)num3 / 7f);
-    }
-
-    public byte adjust(byte actual, byte target)
-    {
-        if (Mathf.Abs((int)(actual - target)) <= (int)this.maxSpeed)
-        {
-            return target;
-        }
-        return (actual >= target) ? (byte)(actual - this.maxSpeed) : (byte)(actual + this.maxSpeed);
-    }
-
-    public void calculateChecksum(ref byte[] data)
-    {
-        int num = 0;
-        for (int i = 0; i < data.Length - 2; i++)
-        {
-            num += (int)data[i];
-        }
-        data[data.Length - 2] = (byte)((num & 65280) >> 8);
-        data[data.Length - 1] = (byte)(num & 255);
-    }
-
-    public bool IsDeviceConnected()
-    {
-        return this.connectedDevice != -1;
-    }
-
-    public void ClearConnectedDevice()
-    {
-        this.connectedDevice = -1;
-    }
-
-    public void ResetQueue()
-    {
-        Debug.Log("clear queue: " + this.commandQueue.Count);
-        this.commandQueue.Clear();
     }
 
     public void CheckForConfigError()
@@ -1707,8 +274,1299 @@ public class BluetoothLE : MonoBehaviour
         this.SendCommand(3);
     }
 
+    public void Clear()
+    {
+        Debug.Log("BLE Clear before scan");
+        this.names.Clear();
+        this.uuids.Clear();
+    }
+
+    public void ClearConnectedDevice()
+    {
+        this.connectedDevice = -1;
+    }
+
+    private void Completed()
+    {
+        if (this.connectCallback != null)
+        {
+            this.connectCallback(this.uuids[this.connectedDevice]);
+        }
+        this.setTimeDate();
+        this.getServoPos();
+        this.requestStatus();
+        this.getName();
+        this.setWriteState(false, true);
+    }
+
+    public void Connect(int index)
+    {
+        this.StopScan();
+        this.connectedDevice = index;
+        BluetoothLE.connectDataState = false;
+        BluetoothLE.connectState = false;
+        BluetoothLE.connecting = true;
+        if (this.jDebug)
+        {
+            Debug.Log(string.Concat("connecting to ", index));
+        }
+        if (this.jDebug)
+        {
+            Debug.Log(this.uuids[this.connectedDevice]);
+        }
+        BluetoothLEHardwareInterface.ConnectToPeripheral(this.uuids[this.connectedDevice], new Action<string>(this.Connected), new Action<string, string>(this.Service), new Action<string, string, string>(this.Characteristic), null);
+        base.Invoke("timeOut", 30f);
+    }
+
+    public void Connected(string msg)
+    {
+        if (this.debugOutput || this.jDebug)
+        {
+            Debug.Log(string.Concat("*** BLE Connected: ", msg));
+        }
+    }
+
+    public void deleteLIM(byte index, string name = "")
+    {
+        if (!BluetoothLE.connectState)
+        {
+            return;
+        }
+        byte[] numArray = new byte[20];
+        numArray[0] = 23;
+        numArray[1] = index;
+        byte[] numArray1 = numArray;
+        char[] charArray = name.ToCharArray();
+        for (int i = 0; i < (int)charArray.Length; i++)
+        {
+            numArray1[i + 3] = (byte)charArray[i];
+        }
+        this.calculateChecksum(ref numArray1);
+        this.commandQueue.Add(numArray1);
+        if (this.jDebug || this.debugOutput)
+        {
+            Debug.Log(string.Concat("deleteLIM(", index, ") called"));
+        }
+    }
+
+    public void Disconnect()
+    {
+        if (this.debugOutput)
+        {
+            Debug.Log("*** BLE Disconnect");
+        }
+            try
+            {
+                BluetoothLEHardwareInterface.DisconnectPeripheral(this.uuids[this.connectedDevice], this.disconnectCallback);
+            }
+            catch (Exception exception1)
+            {
+                Exception exception = exception1;
+                Debug.LogError("DisconnectPeripheral failed 2");
+                Debug.LogException(exception);
+                if (exception.Message.Contains("out of range"))
+                {
+                    Debug.Log("Out of Range disconnect, break out");
+                    base.CancelInvoke("timeOut");
+                    this.m_skipTimeoutDisconnect = true;
+                    return;
+                }
+            }
+            base.CancelInvoke("SendPIN");
+            base.CancelInvoke("timeOut");
+            BluetoothLE.connecting = false;
+            BluetoothLE.connectDataState = false;
+            BluetoothLE.connectState = false;
+            this.connectedDevice = -1;
+            this.setWriteState(false);
+
+            if (this.waitingForSequenceFeedback)
+            {
+                this.waitingForSequenceFeedback = false;
+                return;
+            }
+            base.Invoke("disconnectCB", 2f);
+        
+    }
+
+    private void disconnectCB()
+    {
+        base.CancelInvoke("disconnectCB");
+        if (this.disconnectCallback != null)
+        {
+            this.disconnectCallback(null);
+        }
+    }
+
+    public void disconnectedPeripheralAction(string uuid)
+    {
+        if (this.debugOutput)
+        {
+            Debug.Log(string.Concat("*** BLE disconnectedPeripheralAction: ", uuid));
+        }
+        base.CancelInvoke("SendPIN");
+ 
+        BluetoothLE.connecting = false;
+        BluetoothLE.connectDataState = false;
+        BluetoothLE.connectState = false;
+        this.connectedDevice = -1;
+        this.setWriteState(false);
+        if (this.disconnectCallback != null)
+        {
+            this.disconnectCallback(uuid);
+        }
+        if (this.waitingForSequenceFeedback)
+        {
+            //TODO: TutorialManager.instance.ProgressToNext("BluetoothReject");
+        }
+    }
+
+    public void DisconnectForTutorial()
+    {
+        try
+        {
+            BluetoothLEHardwareInterface.DisconnectPeripheral(this.uuids[this.connectedDevice], null);
+        }
+        catch (Exception exception1)
+        {
+            Exception exception = exception1;
+            Debug.LogError("DisconnectPeripheral failed 3");
+            Debug.LogException(exception);
+            if (exception.Message.Contains("out of range"))
+            {
+                Debug.Log("Out of Range disconnect, break out");
+                base.CancelInvoke("timeOut");
+                this.m_skipTimeoutDisconnect = true;
+                return;
+            }
+        }
+        base.CancelInvoke("SendPIN");
+        base.CancelInvoke("timeOut");
+        BluetoothLE.connecting = false;
+        BluetoothLE.connectDataState = false;
+        BluetoothLE.connectState = false;
+        this.connectedDevice = -1;
+        this.setWriteState(false);
+    }
+
+    public void Error(string msg)
+    {
+        if (this.debugOutput)
+        {
+            Debug.Log(string.Concat("*** BLE error: ", msg));
+        }
+        if (msg.IndexOf("not enabled", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            //TODO error popup
+        }
+    }
+
+    private void executeQueue()
+    {
+        if (this.commandQueue.Count > 0)
+        {
+            this.SendCommand(this.commandQueue[0], false);
+            this.commandQueue.RemoveAt(0);
+        }
+    }
+
+    public void Found(string a, string b)
+    {
+        Debug.Log(string.Concat("BLE Peripheral Found: ", a, ", ", b));
+        if (this.debugOutput)
+        {
+            Debug.Log(string.Concat("*** Peripheral Found: ", a, ", ", b));
+        }
+        if (!b.ToLower().Contains("meccanoid"))
+        {
+            return;
+        }
+        this.uuids.Add(a);
+        this.names.Add(b);
+        if (this.deviceFoundCallback != null)
+        {
+            this.deviceFoundCallback(this.names);
+        }
+    }
+
+    public int getBatteryLevel()
+    {
+        return (!this.config0flag ? -1 : (int)this.status[11]);
+    }
+
+    public Color getColor(int one, int two)
+    {
+        int num = one & 7;
+        int num1 = one >> 3 & 7;
+        int num2 = two & 7;
+        return new Color((float)num / 7f, (float)num1 / 7f, (float)num2 / 7f);
+    }
+
+    public bool getConnectDataState()
+    {
+        return BluetoothLE.connectDataState;
+    }
+
+    public bool getConnecting()
+    {
+        return BluetoothLE.connecting;
+    }
+
+    public bool getConnectState()
+    {
+        return BluetoothLE.connectState;
+    }
+
+    public void getLIMInfo(byte index)
+    {
+        if (!BluetoothLE.connectState)
+        {
+            return;
+        }
+        byte[] numArray = new byte[20];
+        numArray[0] = 19;
+        numArray[1] = index;
+        byte[] numArray1 = numArray;
+        this.calculateChecksum(ref numArray1);
+        this.commandQueue.Add(numArray1);
+        if (this.debugOutput || this.jDebug)
+        {
+            Debug.Log(string.Concat("getLIMInfo(", index, ") called"));
+        }
+    }
+
+    public bool[] getMotors()
+    {
+        return this.motors;
+    }
+
+    public bool getMotorState()
+    {
+        return BluetoothLE.motorState;
+    }
+
+    public void getName()
+    {
+        this.nameflag = false;
+        this.SendCommand(7);
+    }
+
+    public int getScannedDevices()
+    {
+        return (null == BluetoothLE.bluetoothDeviceScript || BluetoothLE.bluetoothDeviceScript.DiscoveredDeviceList == null ? 0 : BluetoothLE.bluetoothDeviceScript.DiscoveredDeviceList.Count);
+    }
+
+    public void getServoPos()
+    {
+        this.getServoPos(true);
+    }
+
+    private void getServoPos(bool queue)
+    {
+        if (!BluetoothLE.connectState)
+        {
+            return;
+        }
+        byte[] numArray = new byte[20];
+        numArray[0] = 9;
+        byte[] numArray1 = numArray;
+        this.calculateChecksum(ref numArray1);
+        if (queue)
+        {
+            this.commandQueue.Add(numArray1);
+        }
+        else
+        {
+            BluetoothLEHardwareInterface.WriteCharacteristic(this.uuids[this.connectedDevice], this.serviceUUID, this.characteristicUUID, numArray1, 20, this.ack, new Action<string>(this.Result));
+        }
+    }
+
+    public void getTimeDate()
+    {
+        this.timeDateflag = false;
+        this.SendCommand(29);
+    }
+
+    public bool getUpdateState()
+    {
+        return BluetoothLE.updateState;
+    }
+
+    public bool getWriteState()
+    {
+        return BluetoothLE.writeState;
+    }
+
+    public void Initialized()
+    {
+        if (this.debugOutput)
+        {
+            Debug.Log("*** BLE initialized");
+        }
+    }
+
+    public bool IsDeviceConnected()
+    {
+        return this.connectedDevice != -1;
+    }
+
     public bool IsDrone()
     {
-        return this.robotType == 0 || this.robotType == 3;
+        return (this.robotType == 0 ? true : this.robotType == 3);
+    }
+
+    public bool isInitialized()
+    {
+        return (null != BluetoothLE.bluetoothDeviceScript ? BluetoothLE.bluetoothDeviceScript.isInitialized() : false);
+    }
+
+    public bool isMatch(string a, string b)
+    {
+        int num;
+        int num1;
+        if (a == null || b == null)
+        {
+            return false;
+        }
+        string[] strArrays = a.Split(new char[] { '-' });
+        string[] strArrays1 = b.Split(new char[] { '-' });
+        if ((int)strArrays.Length == 0 || (int)strArrays1.Length == 0)
+        {
+            return false;
+        }
+        if (!int.TryParse(strArrays[0], NumberStyles.HexNumber, null, out num) || !int.TryParse(strArrays1[0], NumberStyles.HexNumber, null, out num1))
+        {
+            return false;
+        }
+        return num == num1;
+    }
+
+    public void Notification(string msg)
+    {
+        if (this.debugOutput)
+        {
+            Debug.Log(string.Concat("*** Notification: ", msg));
+        }
+    }
+
+    private void OnApplicationPause(bool paused)
+    {
+        BluetoothLEHardwareInterface.PauseMessages(paused);
+        this.m_appPaused = paused;
+    }
+
+    private void OnApplicationQuit()
+    {
+        if (!Application.isEditor)
+        {
+            Debug.Log(string.Concat("Application ending after ", Time.time, " seconds"));
+            this.Disconnect();
+        }
+    }
+
+    private void OnDestroy()
+    {
+        BluetoothLEHardwareInterface.DeInitialize(null);
+
+        BluetoothLE.connecting = false;
+        BluetoothLE.connectDataState = false;
+        BluetoothLE.connectState = false;
+        if (this.debugOutput)
+        {
+            Debug.Log("BluetoothLE.OnDestroy called");
+        }
+    }
+
+    public void playLIM(byte index)
+    {
+        if (!BluetoothLE.connectState)
+        {
+            return;
+        }
+        byte[] numArray = new byte[20];
+        numArray[0] = 21;
+        numArray[1] = index;
+        byte[] numArray1 = numArray;
+        this.calculateChecksum(ref numArray1);
+        this.commandQueue.Add(numArray1);
+        if (this.debugOutput)
+        {
+            Debug.Log(string.Concat("playLIM(", index, ") called"));
+        }
+    }
+
+    public void playPreset(byte index, bool immediatePlay = false)
+    {
+        this.playPreset(index, 0, immediatePlay);
+    }
+
+    public void playPreset(byte index, byte sub, bool immediatePlay = false)
+    {
+        if (!BluetoothLE.connectState)
+        {
+            return;
+        }
+        byte[] numArray = new byte[20];
+        numArray[0] = 25;
+        numArray[1] = index;
+        numArray[2] = sub;
+        byte[] numArray1 = numArray;
+        this.calculateChecksum(ref numArray1);
+        this.commandQueue.Add(numArray1);
+        if (this.debugOutput)
+        {
+            Debug.Log(string.Concat("playPreset(", index, ") called"));
+        }
+    }
+
+    public void recordLIM(byte index)
+    {
+        if (!BluetoothLE.connectState)
+        {
+            return;
+        }
+        byte[] numArray = new byte[20];
+        numArray[0] = 22;
+        numArray[1] = index;
+        byte[] numArray1 = numArray;
+        this.calculateChecksum(ref numArray1);
+        this.commandQueue.Add(numArray1);
+        if (this.debugOutput)
+        {
+            Debug.Log(string.Concat("recordLIM(", index, ") called"));
+        }
+    }
+
+    public void requestStatus()
+    {
+        if (this.m_checkingForStatus)
+        {
+            Debug.Log("checking for status already");
+        }
+        bool flag = false;
+        this.config3flag = false;
+        bool flag1 = flag;
+        flag = flag1;
+        this.config2flag = flag1;
+        bool flag2 = flag;
+        flag = flag2;
+        this.config1flag = flag2;
+        this.config0flag = flag;
+        this.m_checkingForStatus = true;
+        this.SendCommand(1);
+        this.SendCommand(2);
+        this.SendCommand(3);
+        this.SendCommand(32);
+    }
+
+    public void ResetQueue()
+    {
+        Debug.Log(string.Concat("clear queue: ", this.commandQueue.Count));
+        this.commandQueue.Clear();
+    }
+
+    public void resetScreen()
+    {
+        if (this.debugOutput)
+        {
+            Debug.Log("*** BLE resetScreen");
+        }
+        base.CancelInvoke("SendPIN");
+
+        BluetoothLE.connecting = false;
+        BluetoothLE.connectDataState = false;
+        BluetoothLE.connectState = false;
+        this.connectedDevice = -1;
+        this.setWriteState(false);
+        this.robotType = 0;
+    }
+
+    public void Result(string msg)
+    {
+        if (this.debugOutput)
+        {
+            Debug.Log(string.Concat("*** Result: ", msg));
+        }
+    }
+
+    public void Scan()
+    {
+        if (!BluetoothLE.scanning)
+        {
+            this.Clear();
+            BluetoothLEHardwareInterface.ScanForPeripheralsWithServices(null, new Action<string, string>(this.Found), null, false);
+            BluetoothLE.scanning = true;
+            if (this.debugOutput)
+            {
+                Debug.Log("BluetoothLE Scan called");
+            }
+        }
+    }
+
+    public void SendAwake()
+    {
+        if (!BluetoothLE.connectState)
+        {
+            return;
+        }
+        this.SendCommand(25, 29);
+    }
+
+    private void SendCommand(byte command, bool queue)
+    {
+        this.SendCommand(command, 0, queue);
+    }
+
+    public void SendCommand(byte command)
+    {
+        this.SendCommand(command, 0);
+    }
+
+    private void SendCommand(byte command, byte data, bool queue)
+    {
+        this.SendCommand(new byte[] { command, data, data, data, data, data, data, data, data, data, data, data, data, data, data, data, data, data, 0, 0 }, queue);
+    }
+
+    public void SendCommand(byte command, byte data)
+    {
+        this.SendCommand(new byte[] { command, data, data, data, data, data, data, data, data, data, data, data, data, data, data, data, data, data, 0, 0 });
+    }
+
+    public void SendCommand(byte[] ch1)
+    {
+        this.SendCommand(ch1, true);
+    }
+
+    private void SendCommand(byte[] ch1, bool queue)
+    {
+        if (!BluetoothLE.connectState)
+        {
+            return;
+        }
+        this.calculateChecksum(ref ch1);
+        if (this.debugOutput)
+        {
+            string empty = string.Empty;
+            byte[] numArray = ch1;
+            for (int i = 0; i < (int)numArray.Length; i++)
+            {
+                byte num = numArray[i];
+                empty = string.Concat(empty, string.Format("{0:X2}", num));
+            }
+        }
+        if (queue)
+        {
+            this.commandQueue.Add(ch1);
+        }
+        else
+        {
+            BluetoothLEHardwareInterface.WriteCharacteristic(this.uuids[this.connectedDevice], this.serviceUUID, this.characteristicUUID, ch1, 20, this.ack, new Action<string>(this.Result));
+            if (ch1[0] == 11)
+            {
+                BluetoothLE.writeState = (ch1[1] == 0 ? true : ch1[1] == 2);
+            }
+        }
+    }
+
+    public void SendPIN()
+    {
+        if (this.debugOutput)
+        {
+            Debug.Log("*** BLE SendPIN");
+        }
+        byte[] numArray = new byte[20];
+        numArray[0] = 26;
+        numArray[1] = 1;
+        numArray[3] = 1;
+        byte[] numArray1 = numArray;
+        this.calculateChecksum(ref numArray1);
+        BluetoothLEHardwareInterface.WriteCharacteristic(this.uuids[this.connectedDevice], this.serviceUUID, this.characteristicUUID, numArray1, 20, this.ack, new Action<string>(this.Result));
+    }
+
+    public void Service(string a, string b)
+    {
+        if (this.debugOutput)
+        {
+            Debug.Log(string.Concat("*** BLE Service: ", a, ", ", b));
+        }
+    }
+
+    public void setBatteryLevel()
+    {
+        if (!Application.isEditor)
+        {
+            return;
+        }
+        this.status[11] = (byte)Mathf.CeilToInt((float)UnityEngine.Random.Range(1, 6));
+        this.config0flag = true;
+    }
+
+    public void setMapping()
+    {
+        if (!BluetoothLE.connectState)
+        {
+            return;
+        }
+        byte[] numArray = new byte[20];
+        numArray[0] = 31;
+        byte[] numArray1 = numArray;
+        for (int i = 0; i < 16; i++)
+        {
+            numArray1[i + 1] = this.mapping[i];
+        }
+        this.SendCommand(numArray1);
+    }
+
+    public void setMotors(bool[] input)
+    {
+        if ((int)input.Length == 4)
+        {
+            this.motors = input;
+        }
+    }
+
+    public void setMotorState(bool state)
+    {
+        BluetoothLE.motorState = state;
+    }
+
+    private void setMotorValues()
+    {
+        if (!BluetoothLE.connectState)
+        {
+            return;
+        }
+        byte[] numArray = new byte[20];
+        numArray[0] = 13;
+        numArray[3] = (byte)this.motorOutputSpeed;
+        numArray[4] = (byte)this.motorOutputSpeed;
+        numArray[5] = 255;
+        numArray[6] = 255;
+        byte[] numArray1 = numArray;
+        if (this.motors[0])
+        {
+            numArray1[1] = 1;
+        }
+        else if (!this.motors[1])
+        {
+            numArray1[3] = 0;
+        }
+        else
+        {
+            numArray1[1] = 2;
+        }
+        if (this.motors[2])
+        {
+            numArray1[2] = 1;
+        }
+        else if (!this.motors[3])
+        {
+            numArray1[4] = 0;
+        }
+        else
+        {
+            numArray1[2] = 2;
+        }
+        this.calculateChecksum(ref numArray1);
+        BluetoothLEHardwareInterface.WriteCharacteristic(this.uuids[this.connectedDevice], this.serviceUUID, this.characteristicUUID, numArray1, 20, this.ack, new Action<string>(this.Result));
+        if (this.debugOutput)
+        {
+            Debug.Log(string.Concat(new object[] { "setMotorValues: ", numArray1[1], " (", numArray1[3], ") - ", numArray1[2], " (", numArray1[4], ")" }));
+        }
+    }
+
+    public void setName(string name)
+    {
+        if (!BluetoothLE.connectState)
+        {
+            return;
+        }
+        byte[] numArray = new byte[20];
+        numArray[0] = 6;
+        byte[] numArray1 = numArray;
+        for (int i = 0; i < name.Length && i < 16 && name[i] >= ' ' && name[i] <= '~'; i++)
+        {
+            numArray1[i + 1] = (byte)name[i];
+        }
+        this.SendCommand(numArray1);
+        this.meccaName = name;
+        this.nameflag = true;
+    }
+
+    public void setResult(string msg)
+    {
+        if (this.debugOutput)
+        {
+            Debug.Log(string.Concat("*** setResult: ", msg));
+        }
+    }
+
+    public void setRobotType(MODEL type)
+    {
+        this.robotType = (byte)type;
+    }
+
+    public void setServoMode(byte mode)
+    {
+        if (!BluetoothLE.connectState)
+        {
+            return;
+        }
+        byte[] numArray = new byte[] { 11, mode, mode, mode, mode, mode, mode, mode, mode, mode, mode, mode, mode, mode, mode, mode, mode, 0, 0, 0 };
+        this.calculateChecksum(ref numArray);
+        this.commandQueue.Add(numArray);
+    }
+
+    public void setServoPos()
+    {
+        this.setServoPos(true);
+    }
+
+    private void setServoPos(bool queue)
+    {
+        byte[] numArray = new byte[] { 8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0 };
+        for (int i = 0; i < 8; i++)
+        {
+            byte[] numArray1 = this.actualPos;
+            byte num = this.adjust(this.actualPos[i], this.targetPos[i]);
+            byte num1 = num;
+            numArray1[i] = num;
+            numArray[i + 1] = num1;
+        }
+        this.calculateChecksum(ref numArray);
+        if (BluetoothLE.connectState && BluetoothLE.writeState)
+        {
+            if (queue)
+            {
+                this.commandQueue.Add(numArray);
+            }
+            else
+            {
+                BluetoothLEHardwareInterface.WriteCharacteristic(this.uuids[this.connectedDevice], this.serviceUUID, this.characteristicUUID, numArray, 20, this.ack, new Action<string>(this.setResult));
+            }
+            StringBuilder stringBuilder = new StringBuilder();
+            for (int j = 1; j <= 8; j++)
+            {
+                stringBuilder.Append(string.Concat(numArray[j].ToString("X2"), " "));
+            }
+            if (this.debugOutput)
+            {
+                Debug.Log(string.Concat(new object[] { "*** setServoPos: ", stringBuilder.ToString(), " (", Time.realtimeSinceStartup, ")" }));
+            }
+        }
+    }
+
+    private void setTimeDate()
+    {
+        object obj;
+        DateTime now = DateTime.Now;
+        if (this.debugOutput)
+        {
+            Debug.Log(now.TimeOfDay);
+        }
+        int hour = now.Hour;
+        bool flag = hour >= 12;
+        if (flag)
+        {
+            hour = hour - 12;
+        }
+        if (hour == 0)
+        {
+            hour = 12;
+        }
+        byte[] minute = new byte[20];
+        minute[0] = 27;
+        minute[1] = (byte)(hour / 10);
+        minute[2] = (byte)(hour % 10);
+        minute[3] = (byte)(now.Minute / 10);
+        minute[4] = (byte)(now.Minute % 10);
+        if (!flag)
+        {
+            obj = null;
+        }
+        else
+        {
+            obj = 1;
+        }
+        minute[5] = (byte)obj;
+        minute[7] = (byte)now.Month;
+        minute[8] = (byte)now.Day;
+        minute[9] = (byte)(now.Year / 1000 % 10);
+        minute[10] = (byte)(now.Year / 100 % 10);
+        minute[11] = (byte)(now.Year / 10 % 10);
+        minute[12] = (byte)(now.Year % 10);
+        this.SendCommand(minute);
+    }
+
+    public void setUpdateState(bool state)
+    {
+        BluetoothLE.updateState = state;
+    }
+
+    public void setWriteState(bool state)
+    {
+        this.setWriteState(state, false);
+    }
+
+    public void setWriteState(bool state, bool force)
+    {
+        if (!force && BluetoothLE.pendingWriteState == state)
+        {
+            return;
+        }
+        if (!BluetoothLE.pendingWriteState)
+        {
+            this.getServoPos();
+        }
+        BluetoothLE.pendingWriteState = state;
+        this.setServoMode((byte)((!state ? 4 : 2)));
+        if (!BluetoothLE.pendingWriteState)
+        {
+            this.getServoPos();
+        }
+    }
+
+    private void Start()
+    {
+        this.lastInterval = Time.realtimeSinceStartup;
+        this.frames = 0;
+    }
+
+    public void StopScan()
+    {
+        if (BluetoothLE.scanning)
+        {
+            BluetoothLEHardwareInterface.StopScan();
+            BluetoothLE.scanning = false;
+            if (this.debugOutput)
+            {
+                Debug.Log("BluetoothLE StopScan called");
+            }
+        }
+    }
+
+    public void SubResult(string msg, byte[] data)
+    {
+        StringBuilder stringBuilder = new StringBuilder();
+        if ((int)data.Length > 0)
+        {
+            stringBuilder.Append(string.Concat(msg, ": (", data[0].ToString("X"), ") "));
+        }
+        for (int i = 1; i <= 8 && i < (int)data.Length; i++)
+        {
+            stringBuilder.Append(string.Concat(data[i].ToString("X"), " "));
+        }
+        if (this.debugOutput)
+        {
+            Debug.Log(string.Concat("*** SubResult: ", stringBuilder.ToString()));
+        }
+        byte num = data[0];
+        switch (num)
+        {
+            case 1:
+                {
+                    for (int j = 0; j < 16; j++)
+                    {
+                        this.status[j] = data[j + 1];
+                    }
+                    if (this.debugOutput)
+                    {
+                        Debug.Log(string.Concat(new object[] { "STATUS DATA: ", this.status[0], ",", this.status[1], ",", this.status[2], ",", this.status[3], ",", this.status[4], ",", this.status[5], ",", this.status[6], ",", this.status[7], ",", this.status[8], ",", this.status[9], ",", this.status[10], ",", this.status[11], ",", this.status[12], ",", this.status[13], ",", this.status[14], ",", this.status[15] }));
+                    }
+                    if (this.status[15] == 5 || this.status[15] == 6)
+                    {
+                        if (this.jDebug)
+                        {
+                            Debug.Log("ERROR FOUND");
+                        }
+                        this.CheckForConfigError();
+                    }
+                    this.config0flag = true;
+                    this.updateRobotType();
+                    if (this.status[15] == 4)
+                    {
+                        if (this.jDebug)
+                        {
+                            Debug.Log("SWITCH FOUND ");
+                        }
+                        /*if (!TutorialManager.ACTIVE)
+                        {
+                            this.robotType = this.status[0];
+                            Debug.Log(string.Concat("new robot type: ", this.robotType));
+                            ScanManager scanManager = Object.FindObjectOfType<ScanManager>();
+                            if (scanManager != null)
+                            {
+                                scanManager.UpdateRobotInfo();
+                                scanManager.UpdateRobotPageInfo();
+                            }
+                            GameObject gameObject = GameObject.Find("DroneWarningDialog");
+                            if (gameObject != null && gameObject.get_activeSelf())
+                            {
+                                gameObject.GetComponent<ConnectToDroneMeccDialog>().ConnectToMecc();
+                            }
+                            GameObject gameObject1 = GameObject.Find("AppVersionDialog");
+                            if (gameObject1 != null && gameObject1.get_activeSelf() && scanManager != null)
+                            {
+                                if (this.jDebug)
+                                {
+                                    Debug.Log("app version active");
+                                }
+                                scanManager.ReprocessFirmwareCheck();
+                            }
+                            this.requestStatus();
+                        }*/
+                    }
+                    if (this.status[15] != 0)
+                    {
+                        if (this.jDebug)
+                        {
+                            Debug.Log(string.Concat("ERROR FOUND : ", this.status[15]));
+                        }
+                        if (this.jDebug)
+                        {
+                            Debug.Log(string.Concat("behavior running : "));
+                        }
+                    }
+                    this.updateMeccaButtons();
+                    break;
+                }
+            case 2:
+                {
+                    for (int k = 0; k < 16; k++)
+                    {
+                        this.config[k] = data[k + 1];
+                    }
+                    this.config1flag = true;
+                    if (this.debugOutput)
+                    {
+                        Debug.LogWarning(string.Concat(new object[] { "Config1: ", data[1], ",", data[2], ",", data[3], ",", data[4], " | ", data[5], ",", data[6], ",", data[7], ",", data[8], " | ", data[9], ",", data[10], ",", data[11], ",", data[12], " | ", data[13], ",", data[14], ",", data[15], ",", data[16] }));
+                    }
+                    if (this.m_checkingForConfigError)
+                    {
+                        this.m_checkingForConfigError = false;
+                        //Error
+                    }
+                    this.m_checkingForStatus = false;
+                    break;
+                }
+            case 3:
+                {
+                    for (int l = 0; l < 16; l++)
+                    {
+                        this.config[l + 16] = data[l + 1];
+                    }
+                    this.config2flag = true;
+                    if (this.debugOutput)
+                    {
+                        Debug.LogWarning(string.Concat(new object[] { "Config2: ", data[1], ",", data[2], ",", data[3], ",", data[4], " | ", data[5], ",", data[6], ",", data[7], ",", data[8], " | ", data[9], ",", data[10], ",", data[11], ",", data[12], " | ", data[13], ",", data[14], ",", data[15], ",", data[16] }));
+                    }
+                    break;
+                }
+            case 7:
+                {
+                    this.meccaName = string.Empty;
+                    for (int m = 1; m <= 16 && data[m] >= 32 && data[1] <= 126; m++)
+                    {
+                        BluetoothLE bluetoothLE = this;
+                        bluetoothLE.meccaName = string.Concat(bluetoothLE.meccaName, (char)data[m]);
+                    }
+                    this.nameflag = true;
+                    break;
+                }
+            case 9:
+                {
+                    for (int n = 0; n < 8; n++)
+                    {
+                        this.actualPos[n] = data[n + 1];
+                    }
+                    if (this.getServoPosCallback != null)
+                    {
+                        this.getServoPosCallback();
+                    }
+                    break;
+                }
+            default:
+                {
+                    switch (num)
+                    {
+                        case 26:
+                            {
+                                base.CancelInvoke("timeOut");
+                                base.CancelInvoke("SendPIN");
+                                BluetoothLE.connecting = false;
+                                if (data[1] != 0 || data[2] != 1 || data[3] != 255)
+                                {
+                                    if (this.debugOutput)
+                                    {
+                                        Debug.Log(string.Concat(new object[] { "MB_SendPinNumber returned: ", data[1], ", ", data[2], ", ", data[3], ", ", data[4] }));
+                                    }
+                                    BluetoothLE.connectState = true;
+                                    this.Completed();
+                                }
+                                else
+                                {
+                                    BluetoothLE.connectState = false;
+                                    this.Disconnect();
+                                }
+                                break;
+                            }
+                        case 29:
+                            {
+                                this.timeDate = string.Format("{0}{1}:{2}{3}{4} onMB_GetServoMapping {5}/{6}/{7}{8}{9}{10}", new object[] { (data[1] != 0 ? data[1].ToString() : string.Empty), data[2].ToString(), data[3].ToString(), data[4].ToString(), (data[5] != 0 ? "pm" : "am"), data[7].ToString(), data[8].ToString(), data[9].ToString(), data[10].ToString(), data[11].ToString(), data[12].ToString() });
+                                this.timeDateflag = true;
+                                break;
+                            }
+                        default:
+                            {
+                                if (num == 15)
+                                {
+                                    if (this.getLEDColorCallback != null)
+                                    {
+                                        Color color = this.getColor((int)data[3], (int)data[4]);
+                                        this.getLEDColorCallback(color);
+                                    }
+                                }
+                                else if (num != 19)
+                                {
+                                    if (num == 32)
+                                    {
+                                        for (int o = 0; o < 16; o++)
+                                        {
+                                            this.mapping[o] = data[o + 1];
+                                        }
+                                        this.config3flag = true;
+                                        if (this.debugOutput)
+                                        {
+                                            Debug.LogWarning(string.Concat(new object[] { "Mapping: ", data[1], ",", data[2], ",", data[3], ",", data[4], " | ", data[5], ",", data[6], ",", data[7], ",", data[8], " | ", data[9], ",", data[10], ",", data[11], ",", data[12], " | ", data[13], ",", data[14], ",", data[15], ",", data[16] }));
+                                        }
+                                    }
+                                }
+                                else if (this.getLIMInfoCallback != null)
+                                {
+                                    byte num1 = data[1];
+                                    if (this.jDebug)
+                                    {
+                                        Debug.Log(string.Concat("GET LIM INFO: ", num1));
+                                    }
+                                    byte num2 = data[2];
+                                    char[] chrArray = new char[16];
+                                    for (int p = 0; p < 15; p++)
+                                    {
+                                        chrArray[p] = (char)data[p + 3];
+                                    }
+                                    chrArray[15] = '\0';
+                                    if (this.jDebug)
+                                    {
+                                        Debug.Log(string.Concat("LIM NAME: ", new string(chrArray)));
+                                    }
+                                    float single = (float)Convert.ToInt32(num2);
+                                    if (this.jDebug)
+                                    {
+                                        Debug.Log(string.Concat(new object[] { "LIM CONVERTED DURATION: ", single, " : ", num2 }));
+                                    }
+                                    this.getLIMInfoCallback(num1, single, new string(chrArray));
+                                }
+                                break;
+                            }
+                    }
+                    break;
+                }
+        }
+        if (this.resultsCallback != null)
+        {
+            this.resultsCallback(data);
+        }
+    }
+
+    public void Subscribe()
+    {
+        if (this.debugOutput)
+        {
+            Debug.Log("*** BLE Subscribe");
+        }
+        BluetoothLEHardwareInterface.SubscribeCharacteristic(this.uuids[this.connectedDevice], this.serviceUUID, this.subscribeUUID, new Action<string>(this.Subscribed), new Action<string, byte[]>(this.SubResult));
+    }
+
+    public void Subscribed(string msg)
+    {
+        if (this.debugOutput)
+        {
+            Debug.Log(string.Concat("*** Subscribed: ", msg));
+        }
+        this.SendPIN();
+    }
+
+    public void timeOut()
+    {
+        if (this.debugOutput || this.jDebug)
+        {
+            Debug.Log("*** BLE timeOut");
+        }
+        base.CancelInvoke("timeOut");
+        this.Disconnect();
+        if (this.m_skipTimeoutDisconnect)
+        {
+            this.m_skipTimeoutDisconnect = false;
+            return;
+        }
+        if (this.disconnectCallback != null)
+        {
+            this.disconnectCallback(null);
+        }
+    }
+
+    private void Update()
+    {
+        BluetoothLE bluetoothLE = this;
+        bluetoothLE.frames = bluetoothLE.frames + 1;
+        float _realtimeSinceStartup = Time.realtimeSinceStartup;
+        if (BluetoothLE.connectState && _realtimeSinceStartup > this.lastInterval + this.updateInterval)
+        {
+            if (this.interleave % 10 == 1)
+            {
+                this.SendCommand(1, false);
+            }
+            else if (BluetoothLE.updateState && this.interleave % 2 == 0)
+            {
+                if (!BluetoothLE.writeState)
+                {
+                    this.getServoPos(false);
+                }
+                else
+                {
+                    this.setServoPos(false);
+                }
+            }
+            else if (!BluetoothLE.motorState || this.interleave % 10 != 5)
+            {
+                this.executeQueue();
+            }
+            else
+            {
+                this.setMotorValues();
+            }
+            BluetoothLE bluetoothLE1 = this;
+            int num = bluetoothLE1.interleave + 1;
+            int num1 = num;
+            bluetoothLE1.interleave = num;
+            if (num1 >= 20)
+            {
+                this.interleave = 0;
+            }
+            this.frames = 0;
+            this.lastInterval = _realtimeSinceStartup;
+        }
+        if (this.connectDataCallback != null && !BluetoothLE.connecting && !BluetoothLE.connectDataState && 0 <= this.connectedDevice && this.connectedDevice < this.uuids.Count && this.config0flag && this.config1flag && this.config2flag && this.config3flag && this.nameflag)
+        {
+            BluetoothLE.connectDataState = true;
+            this.connectDataCallback(this.uuids[this.connectedDevice]);
+        }
+    }
+
+    private void updateMeccaButtons()
+    {
+        this.meccaBlueButton = (this.status[7] & 1) != 0;
+        this.meccaRedButton = (this.status[7] & 2) != 0;
+        this.meccaGreenButton = (this.status[7] & 4) != 0;
+        this.meccaYellowButton = (this.status[7] & 8) != 0;
+        byte num = (byte)(this.status[7] & 15);
+        if (num != this.prevButtons && this.OnMeccaBrainButtonsChanged != null)
+        {
+            byte num1 = (byte)(num ^ this.prevButtons);
+            this.OnMeccaBrainButtonsChanged((num1 & 1) != 0, (num1 & 2) != 0, (num1 & 4) != 0, (num1 & 8) != 0);
+        }
+        this.prevButtons = num;
+    }
+
+    private void updateRobotType()
+    {
+        if (this.config0flag && this.status[0] != this.robotType)
+        {
+            this.robotType = this.status[0];
+            this.robotEverSet = true;
+            //TODO update robot info
+        }
+        this.robotType = this.status[0];
+    }
+
+    public enum MB_Commands : byte
+    {
+        MB_Status = 1,
+        MB_GetConfig1 = 2,
+        MB_GetConfig2 = 3,
+        MB_SetConfig1 = 4,
+        MB_Setconfig2 = 5,
+        MB_SetName = 6,
+        MB_GetName = 7,
+        MB_SetServoPos = 8,
+        MB_GetServoPos = 9,
+        MB_GetServoStatus = 10,
+        MB_SetServoStatus = 11,
+        MB_SetServoLED = 12,
+        MB_SetMotorValues = 13,
+        MB_GetMotorValues = 14,
+        MB_GetRGBLEDColor1 = 15,
+        MB_GetRGBLEDColor2 = 16,
+        MB_SetRGBLEDColor1 = 17,
+        MB_SetRGBLEDColor2 = 18,
+        MB_GetLIMInfo = 19,
+        MB_ChangeLIMName = 20,
+        MB_PlayLIM = 21,
+        MB_RecordLIM = 22,
+        MB_DeleteLIM = 23,
+        MB_GetPresetInfo = 24,
+        MB_PlayPreset = 25,
+        MB_SendPinNumber = 26,
+        MB_SetTimeAndDate = 27,
+        MB_SetPCBLED = 28,
+        MB_GetTimeAndDate = 29,
+        MB_GetServoLED = 30,
+        MB_SetServoMapping = 31,
+        MB_GetServoMapping = 32
+    }
+
+    public struct MotorIndex
+    {
+        public const int leftFront = 0;
+
+        public const int leftRear = 1;
+
+        public const int rightFront = 2;
+
+        public const int rightRear = 3;
+    }
+
+    public struct RobotType
+    {
+        public const byte drone = 0;
+
+        public const byte g15ks = 1;
+
+        public const byte g15 = 2;
+
+        public const byte g16Drone = 3;
+
+        public const byte g16ks = 4;
+
+        public const byte g16 = 5;
+    }
+
+    public enum ServoMode
+    {
+        SendOld,
+        RecieveOld,
+        Send,
+        Unknown,
+        Recieve
+    }
+
+    public enum MODEL
+    {
+        OTHER,
+        TALL,
+        SHORT,
+        G16DRONE,
+        TALLG16,
+        SHORTG16
     }
 }

@@ -82,8 +82,8 @@ public class MainMenuScript : MonoBehaviour {
         if (deviceFoundListCheck != null) deviceFoundListCheck = new List<string>();
 
         //Check if button already exist
-        if (!deviceFoundListCheck.Contains(name))
-        {
+        //if (!deviceFoundListCheck.Contains(name))
+        //{
             GameObject createButton = Instantiate(deviceButton) as GameObject;
             deviceButtonScript buttonScript = createButton.GetComponent<deviceButtonScript>();
             Button buttonCtrl = createButton.GetComponent<Button>();
@@ -95,7 +95,7 @@ public class MainMenuScript : MonoBehaviour {
             createButton.transform.SetParent(deviceList);
     
             deviceFoundListCheck.Add(uuid);
-        }
+        //}
 
     }
 
