@@ -34,15 +34,15 @@ public class BluetoothLE : MonoBehaviour
 
     private static BluetoothDeviceScript bluetoothDeviceScript;
 
-    public byte[] actualPos = new byte[] { 127, 127, 127, 127, 127, 127, 127, 127 };
+    private byte[] actualPos = new byte[] { 127, 127, 127, 127, 127, 127, 127, 127 };
 
-    public byte[] targetPos = new byte[] { 127, 127, 127, 127, 127, 127, 127, 127 };
+    private byte[] targetPos = new byte[] { 127, 127, 127, 127, 127, 127, 127, 127 };
 
-    public byte[] status = new byte[16];
+    private byte[] status = new byte[16];
 
-    public byte[] config = new byte[32];
+    private byte[] config = new byte[32];
 
-    public byte[] mapping = new byte[16];
+    private byte[] mapping = new byte[16];
 
     public bool config0flag;
 
@@ -78,9 +78,9 @@ public class BluetoothLE : MonoBehaviour
 
     private string subscribeUUID = "FFF1";
 
-    public string timeDate = string.Empty;
+    public string timeDate = "";
 
-    public string meccaName = string.Empty;
+    public string meccaName = "";
 
     private static bool created;
 
@@ -419,34 +419,6 @@ public class BluetoothLE : MonoBehaviour
         {
             //TODO: TutorialManager.instance.ProgressToNext("BluetoothReject");
         }
-    }
-
-    public void DisconnectForTutorial()
-    {
-        try
-        {
-            BluetoothLEHardwareInterface.DisconnectPeripheral(this.uuids[this.connectedDevice], null);
-        }
-        catch (Exception exception1)
-        {
-            Exception exception = exception1;
-            Debug.LogError("DisconnectPeripheral failed 3");
-            Debug.LogException(exception);
-            if (exception.Message.Contains("out of range"))
-            {
-                Debug.Log("Out of Range disconnect, break out");
-                base.CancelInvoke("timeOut");
-                this.m_skipTimeoutDisconnect = true;
-                return;
-            }
-        }
-        base.CancelInvoke("SendPIN");
-        base.CancelInvoke("timeOut");
-        BluetoothLE.connecting = false;
-        BluetoothLE.connectDataState = false;
-        BluetoothLE.connectState = false;
-        this.connectedDevice = -1;
-        this.setWriteState(false);
     }
 
     public void Error(string msg)
@@ -861,6 +833,7 @@ public class BluetoothLE : MonoBehaviour
         else
         {
             BluetoothLEHardwareInterface.WriteCharacteristic(this.uuids[this.connectedDevice], this.serviceUUID, this.characteristicUUID, ch1, 20, this.ack, new Action<string>(this.Result));
+            Debug.Log("*** Debug: Send command!");
             if (ch1[0] == 11)
             {
                 BluetoothLE.writeState = (ch1[1] == 0 ? true : ch1[1] == 2);
@@ -1058,7 +1031,6 @@ public class BluetoothLE : MonoBehaviour
 
     private void setTimeDate()
     {
-        object obj;
         DateTime now = DateTime.Now;
         if (this.debugOutput)
         {
@@ -1080,15 +1052,7 @@ public class BluetoothLE : MonoBehaviour
         minute[2] = (byte)(hour % 10);
         minute[3] = (byte)(now.Minute / 10);
         minute[4] = (byte)(now.Minute % 10);
-        if (!flag)
-        {
-            obj = null;
-        }
-        else
-        {
-            obj = 1;
-        }
-        minute[5] = (byte)obj;
+        minute[5] = (byte)((!flag) ? 0 : 1);
         minute[7] = (byte)now.Month;
         minute[8] = (byte)now.Day;
         minute[9] = (byte)(now.Year / 1000 % 10);
@@ -1161,6 +1125,7 @@ public class BluetoothLE : MonoBehaviour
             Debug.Log(string.Concat("*** SubResult: ", stringBuilder.ToString()));
         }
         byte num = data[0];
+        this.status = new byte[16];
         switch (num)
         {
             case 1:
@@ -1168,7 +1133,9 @@ public class BluetoothLE : MonoBehaviour
                     for (int j = 0; j < 16; j++)
                     {
                         this.status[j] = data[j + 1];
+                           
                     }
+
                     if (this.debugOutput)
                     {
                         Debug.Log(string.Concat(new object[] { "STATUS DATA: ", this.status[0], ",", this.status[1], ",", this.status[2], ",", this.status[3], ",", this.status[4], ",", this.status[5], ",", this.status[6], ",", this.status[7], ",", this.status[8], ",", this.status[9], ",", this.status[10], ",", this.status[11], ",", this.status[12], ",", this.status[13], ",", this.status[14], ",", this.status[15] }));
