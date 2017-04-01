@@ -990,6 +990,13 @@ public class BluetoothLE : MonoBehaviour
         this.commandQueue.Add(numArray);
     }
 
+    public void changeServoPos(byte[] pos)
+    {
+        //byte[] targetPos = new byte[] { 127, 127, 127, 127, 127, 127, 127, 127 };
+        this.targetPos = pos;
+        this.setServoPos();
+    }
+
     public void setServoPos()
     {
         this.setServoPos(true);

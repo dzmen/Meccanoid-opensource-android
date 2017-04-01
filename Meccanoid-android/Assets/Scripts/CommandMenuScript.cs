@@ -11,16 +11,32 @@ public class CommandMenuScript : MonoBehaviour {
     public Canvas MainCanvas;
     public Canvas CommandCanvas;
 
+    private int preset = 1;
+
 	// Use this for initialization
 	void Start () {
 
 	}
 
     public void onGetName() {
-        //BLE.getName();
-        //Debug.Log("*** Debug Name: " + BLE.meccaName);
-        //Iname.text = BLE.meccaName;
-        Iname.text = BLE.getBatteryLevel().ToString();
+        Iname.text = BLE.meccaName;
+    }
+
+    public void onChangeServo()
+    {
+        byte[] targetPos = new byte[] { 180, 127, 127, 127, 127, 127, 127, 127 };
+        BLE.changeServoPos(targetPos);
+    }
+
+    public void onChangePreset(int value)
+    {
+        this.preset = value+1;
+    }
+
+    public void onPlayPreset()
+    {
+        byte bpreset = byte.Parse(this.preset.ToString());
+        BLE.playPreset(bpreset, true);
     }
 
     /*
@@ -53,9 +69,7 @@ public class CommandMenuScript : MonoBehaviour {
     19: ?????
     ==========================================================
 
-    
     */
-
 
     public void onDisconnect()
     {
