@@ -22,12 +22,6 @@ public class CommandMenuScript : MonoBehaviour {
         Iname.text = BLE.meccaName;
     }
 
-    public void onChangeServo()
-    {
-        byte[] targetPos = new byte[] { 180, 127, 127, 127, 127, 127, 127, 127 };
-        BLE.changeServoPos(targetPos);
-    }
-
     public void onChangePreset(int value)
     {
         this.preset = value+1;

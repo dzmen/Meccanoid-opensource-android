@@ -40,9 +40,9 @@ public class BluetoothLE : MonoBehaviour
 
     private byte[] status = new byte[16];
 
-    private byte[] config = new byte[32];
+    public byte[] config = new byte[32];
 
-    private byte[] mapping = new byte[16];
+    public byte[] mapping = new byte[16];
 
     public bool config0flag;
 
@@ -990,13 +990,6 @@ public class BluetoothLE : MonoBehaviour
         this.commandQueue.Add(numArray);
     }
 
-    public void changeServoPos(byte[] pos)
-    {
-        //byte[] targetPos = new byte[] { 127, 127, 127, 127, 127, 127, 127, 127 };
-        this.targetPos = pos;
-        this.setServoPos();
-    }
-
     public void setServoPos()
     {
         this.setServoPos(true);
@@ -1435,6 +1428,11 @@ public class BluetoothLE : MonoBehaviour
             BluetoothLE.connectDataState = true;
             this.connectDataCallback(this.uuids[this.connectedDevice]);
         }
+    }
+
+    public void settargetPos(int pos, byte data)
+    {
+        this.targetPos[pos] = data;
     }
 
     private void updateMeccaButtons()
